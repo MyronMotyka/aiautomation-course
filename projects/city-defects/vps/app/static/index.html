@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Міські дефекти</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Міські дефекти</h1>
+    <p class="sub">Сфотографуйте проблему, і AI визначить, що це, наскільки небезпечно і яка служба має це виправити.</p>
+    <div class="hazard" aria-hidden="true"></div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button id="tab-report" role="tab" aria-selected="true" data-tab="report">Повідомити</button>
+    <button id="tab-track" role="tab" aria-selected="false" data-tab="track">Мої заявки</button>
+  </div>
+
+  <section id="view-report" class="stack">
+    <form class="panel" id="report-form" novalidate>
+      <h2>1. Де проблема</h2>
+      <div id="map"></div>
+      <div class="geo-row">
+        <span class="hint" id="geo-status">Визначаємо ваше місцезнаходження…</span>
+        <button class="btn small ghost" type="button" id="locate-btn">Моє місце</button>
+      </div>
+      <label class="f">Адреса <span class="hint">заповнюється автоматично, можна виправити</span>
+        <input type="text" id="address" placeholder="вул. Шевченка, 12, біля зупинки" autocomplete="off">
+      </label>
+
+      <h2>2. Фото</h2>
+      <div class="drop" id="drop">
+        <input type="file" id="photo" accept="image/*" capture="environment" aria-label="Фото проблеми">
+        <div id="drop-empty"><div class="big">Сфотографувати або вибрати фото</div><div class="hint">Обличчя й номери авто краще не знімати крупно.</div></div>
+        <img id="preview" alt="Вибране фото" hidden>
+      </div>
+
+      <h2>3. Коментар</h2>
+      <label class="f">Що сталося <span class="hint">необов'язково, але допомагає AI</span>
+        <textarea id="comment" placeholder="Яма вже тиждень, вчора туди потрапила машина"></textarea>
+      </label>
+      <label class="f">Контакт для зворотного зв'язку <span class="hint">необов'язково, бачить лише диспетчер</span>
+        <input type="text" id="contact" placeholder="Ім'я, телефон або Telegram">
+      </label>
+
+      <div class="btns"><button class="btn" type="submit" id="analyze-btn" disabled>Проаналізувати фото</button></div>
+      <div id="ai-status" class="hint" role="status"></div>
+    </form>
+    <div id="ai-result" hidden></div>
+  </section>
+
+  <section id="view-track" class="stack" hidden>
+    <div class="panel">
+      <h2>Статус заявки</h2>
+      <div class="filters">
+        <input type="text" id="track-id" placeholder="Номер заявки, напр. ZV-261105-4821">
+        <button class="btn small" id="track-btn" type="button">Знайти</button>
+      </div>
+      <div id="track-out"></div>
+    </div>
+    <div class="panel">
+      <h2>Надіслані з цього пристрою</h2>
+      <div id="mine" class="stack"></div>
+    </div>
+  </section>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="/static/common.js"></script>
+<script>
+let CATS = {};
+api("/api/meta").then((m) => { CATS = m.categories; });
+
+/* ---------- вкладки ---------- */
+function showTab(name) {
+  for (const v of ["report", "track"]) { $("view-" + v).hidden = v !== name; $("tab-" + v).setAttribute("aria-selected", v === name); }
+  if (name === "track") renderMine();
+  else setTimeout(() => map.invalidateSize(), 0);
+}
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+/* ---------- карта й геолокація ---------- */
+const map = L.map("map").setView(DEFAULT_CENTER, 12);
+L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATTR }).addTo(map);
+let marker = null, point = null;
+
+function setPoint(lat, lng, source) {
+  point = { lat, lng };
+  if (!marker) {
+    marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+    marker.on("dragend", () => { const p = marker.getLatLng(); setPoint(p.lat, p.lng, "Точку пересунуто."); });
+  } else marker.setLatLng([lat, lng]);
+  if (source !== "Точку пересунуто.") map.setView([lat, lng], 17);
+  $("geo-status").textContent = `${source} Перетягніть маркер, якщо треба уточнити.`;
+  fillAddress(lat, lng);
+}
+let geoTimer;
+function fillAddress(lat, lng) {
+  clearTimeout(geoTimer); // Nominatim дозволяє не більше 1 запиту на секунду
+  geoTimer = setTimeout(async () => {
+    try { const { address } = await api(`/api/geocode?lat=${lat}&lng=${lng}`); if (address) $("address").value = address; } catch {}
+  }, 700);
+}
+function locate() {
+  if (!navigator.geolocation) { $("geo-status").textContent = "Браузер не підтримує геолокацію. Натисніть на карту, щоб поставити точку."; return; }
+  $("geo-status").textContent = "Визначаємо ваше місцезнаходження…";
+  navigator.geolocation.getCurrentPosition(
+    (p) => setPoint(p.coords.latitude, p.coords.longitude, `Локацію визначено (точність ~${Math.round(p.coords.accuracy)} м).`),
+    (e) => { $("geo-status").textContent = e.code === 1
+      ? "Доступ до локації заборонено. Натисніть на карту, щоб поставити точку, або дозвольте доступ у налаштуваннях браузера."
+      : "Не вдалося визначити локацію. Натисніть на карту, щоб поставити точку."; },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+}
+map.on("click", (e) => setPoint(e.latlng.lat, e.latlng.lng, "Точку поставлено."));
+$("locate-btn").addEventListener("click", locate);
+locate();
+
+/* ---------- фото ---------- */
+let photoFile = null, analysis = null, photoId = null;
+$("photo").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  photoFile = f; analysis = null; $("ai-result").hidden = true;
+  $("preview").src = URL.createObjectURL(f); $("preview").hidden = false; $("drop-empty").hidden = true;
+  if (!point) { const g = readExifGps(await f.arrayBuffer()); if (g) setPoint(g.lat, g.lng, "Локацію взято з фото."); }
+  $("analyze-btn").disabled = false;
+});
+
+// Якщо геолокацію заборонено, пробуємо GPS з EXIF фото (працює не на всіх телефонах).
+function readExifGps(buf) {
+  try {
+    const v = new DataView(buf);
+    if (v.getUint16(0) !== 0xFFD8) return null;
+    let o = 2;
+    while (o + 10 < v.byteLength) {
+      const m = v.getUint16(o);
+      if ((m & 0xFF00) !== 0xFF00) return null;
+      if (m === 0xFFE1 && v.getUint32(o + 4) === 0x45786966) {
+        const t = o + 10, le = v.getUint16(t) === 0x4949;
+        const u16 = (p) => v.getUint16(p, le), u32 = (p) => v.getUint32(p, le);
+        const ifd0 = t + u32(t + 4);
+        let gps = 0;
+        for (let i = 0; i < u16(ifd0); i++) { const e = ifd0 + 2 + i * 12; if (u16(e) === 0x8825) gps = t + u32(e + 8); }
+        if (!gps) return null;
+        const g = {};
+        for (let i = 0; i < u16(gps); i++) {
+          const e = gps + 2 + i * 12, tag = u16(e);
+          if (tag === 1 || tag === 3) g[tag] = String.fromCharCode(v.getUint8(e + 8));
+          if (tag === 2 || tag === 4) { const p = t + u32(e + 8), r = (k) => u32(p + k * 8) / u32(p + k * 8 + 4); g[tag] = r(0) + r(1) / 60 + r(2) / 3600; }
+        }
+        const lat = g[2] * (g[1] === "S" ? -1 : 1), lng = g[4] * (g[3] === "W" ? -1 : 1);
+        return Number.isFinite(lat) && Number.isFinite(lng) && (lat || lng) ? { lat, lng } : null;
+      }
+      o += 2 + v.getUint16(o + 2);
+    }
+  } catch {}
+  return null;
+}
+
+/* ---------- аналіз ---------- */
+$("report-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!photoFile) return;
+  const btn = $("analyze-btn"); btn.disabled = true;
+  $("ai-status").textContent = "AI розглядає фото… Зазвичай це 5–20 секунд.";
+  const fd = new FormData();
+  fd.append("photo", photoFile); fd.append("comment", $("comment").value); fd.append("address", $("address").value);
+  try {
+    const r = await api("/api/analyze", { method: "POST", body: fd });
+    analysis = r.analysis; photoId = r.photo_id;
+    $("ai-status").textContent = "";
+    renderAi();
+  } catch (err) { $("ai-status").textContent = err.message; }
+  finally { btn.disabled = false; }
+});
+
+function renderAi() {
+  const a = analysis, box = $("ai-result");
+  const catSel = el("select", { id: "ai-cat", "aria-label": "Категорія" },
+    Object.entries(CATS).map(([k, v]) => el("option", { value: k, selected: k === a.category }, v.name)));
+  const dept = el("span", {}, a.department);
+  catSel.addEventListener("change", () => { dept.textContent = CATS[catSel.value].dept + (a.emergency ? " + аварійна служба" : ""); });
+  const status = el("div", { role: "status" });
+  const send = el("button", { class: "btn", type: "button" }, a.valid ? "Надіслати заявку" : "Все одно надіслати на ручний розгляд");
+  send.addEventListener("click", () => submit(send, status, catSel.value));
+  box.replaceChildren(el("div", { class: "panel" }, el("h2", {}, "Висновок AI"),
+    el("div", { class: "ai" },
+      el("div", { class: "ai-head" }, el("strong", { style: "flex:1 1 200px" }, a.valid ? a.title : "Схоже, це не міська проблема"),
+        sevChip(a.severity), a.emergency ? el("span", { class: "chip emer" }, "Аварійна") : null),
+      el("dl", { class: "ai-body" },
+        !a.valid ? [el("dt", {}, "Чому"), el("dd", {}, a.reject_reason || "AI не побачив дефекту на фото.")] : null,
+        el("dt", {}, "Що на фото"), el("dd", {}, a.description || "—"),
+        el("dt", {}, "Категорія"), el("dd", {}, catSel, el("div", { class: "hint" }, "Якщо AI помилився, виберіть правильну.")),
+        el("dt", {}, "Куди піде"), el("dd", {}, dept),
+        el("dt", {}, "Ризики"), el("dd", {}, a.hazards.length ? a.hazards.join("; ") : "—"),
+        el("dt", {}, "Рекомендація"), el("dd", {}, a.action || "—"),
+        el("dt", {}, "Впевненість AI"), el("dd", { class: "mono" }, Math.round(a.confidence * 100) + "%"))),
+    point ? null : el("div", { class: "note bad" }, "Точку на карті не вибрано. Заявка піде лише з адресою."),
+    el("div", { class: "btns" }, send), status));
+  box.hidden = false;
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function submit(btn, status, category) {
+  btn.disabled = true;
+  try {
+    const r = await api("/api/reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+      photo_id: photoId, category, address: $("address").value, lat: point?.lat ?? null, lng: point?.lng ?? null,
+      comment: $("comment").value, contact: $("contact").value }) });
+    remember(r.id);
+    status.replaceChildren(el("div", { class: "note good" }, r.duplicate
+      ? ["Про цю проблему вже повідомили, заявка ", el("strong", { class: "mono" }, r.id), `. Ваш голос додано, тепер скарг: ${r.confirmations}.`]
+      : ["Заявку прийнято. Номер: ", el("strong", { class: "mono" }, r.id), `. Передано: ${r.department}.`]));
+    resetForm();
+  } catch (err) { btn.disabled = false; status.replaceChildren(el("div", { class: "note bad" }, err.message)); }
+}
+function remember(id) { const m = store.get("cd-mine", []); if (!m.includes(id)) store.set("cd-mine", [id, ...m].slice(0, 30)); }
+function resetForm() {
+  photoFile = null; photoId = null;
+  $("photo").value = ""; $("preview").hidden = true; $("drop-empty").hidden = false;
+  $("comment").value = ""; $("analyze-btn").disabled = true;
+}
+
+/* ---------- мої заявки ---------- */
+async function renderMine() {
+  const ids = store.get("cd-mine", []);
+  if (!ids.length) { $("mine").replaceChildren(el("div", { class: "empty" }, el("b", {}, "Ви ще нічого не надсилали"), "Після відправки заявка з'явиться тут разом зі статусом.")); return; }
+  const rows = await Promise.all(ids.map((id) => api("/api/reports/" + id).catch(() => null)));
+  $("mine").replaceChildren(...rows.filter(Boolean).map((r) => reportCard(r)));
+}
+$("track-btn").addEventListener("click", async () => {
+  const q = $("track-id").value.trim();
+  if (!q) return;
+  try { $("track-out").replaceChildren(reportCard(await api("/api/reports/" + encodeURIComponent(q)))); }
+  catch (err) { $("track-out").replaceChildren(el("div", { class: "note" }, err.message)); }
+});
+</script>
+</body>
+</html>

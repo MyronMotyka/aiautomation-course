@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "city-defects",
+      "runtimeExecutable": "projects/city-defects/vps/.venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "projects/city-defects/vps", "--port", "8000"],
+      "port": 8000
+    }
+  ]
+}

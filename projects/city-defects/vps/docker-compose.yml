@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    env_file: .env
+    volumes:
+      - ./data:/srv/data          # база і фото зберігаються на VPS
+    restart: unless-stopped
+
+  caddy:                          # автоматичний HTTPS (Let's Encrypt)
+    image: caddy:2.8
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [app]
+    restart: unless-stopped
+
+volumes:
+  caddy_data:

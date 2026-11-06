@@ -1,0 +1,633 @@
+<title>Міські дефекти</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow civic-service column; two tabs — citizen report form and city dispatch board. */
+:root {
+  --bg: #EDEFF2; --surface: #FFFFFF; --ink: #1B2128; --muted: #5B6672; --line: #D3D9E0;
+  --accent: #E8A317; --accent-ink: #1B2128; --soft: #F6F7F9;
+  --s1: #5E8F6A; --s2: #8A9E3C; --s3: #C9940F; --s4: #DB6418; --s5: #C42F28;
+  --ok: #2F7D4F; --danger: #B3261E;
+  --f-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Onest", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11151A; --surface: #1A2028; --ink: #E6E9ED; --muted: #97A2AE; --line: #2C3541;
+  --accent: #F0B23B; --accent-ink: #11151A; --soft: #151A21;
+  --s1: #74AE82; --s2: #A8BD55; --s3: #E2AE2C; --s4: #F07F38; --s5: #EE5A50;
+  --ok: #5FBF85; --danger: #F07167; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11151A; --surface: #1A2028; --ink: #E6E9ED; --muted: #97A2AE; --line: #2C3541;
+  --accent: #F0B23B; --accent-ink: #11151A; --soft: #151A21;
+  --s1: #74AE82; --s2: #A8BD55; --s3: #E2AE2C; --s4: #F07F38; --s5: #EE5A50;
+  --ok: #5FBF85; --danger: #F07167; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); }
+.wrap { max-width: 760px; margin: 0 auto; padding-block: 20px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header { display: flex; flex-direction: column; gap: 6px; }
+h1 { font: 700 26px/1.15 var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 0; max-width: 60ch; }
+.hazard { height: 6px; border-radius: 3px; margin-top: 12px;
+  background: repeating-linear-gradient(-45deg, var(--accent) 0 12px, var(--ink) 12px 24px); opacity: .9; }
+
+.tabs { display: flex; gap: 4px; margin: 18px 0 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.tabs button { flex: 1; border: 0; background: transparent; color: var(--muted); font: 600 14px var(--f-body); padding: 10px 8px; border-radius: 7px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+h2 { font: 500 16px/1.3 var(--f-display); margin: 0; }
+label.f { display: flex; flex-direction: column; gap: 6px; font-weight: 500; font-size: 14px; }
+.hint { color: var(--muted); font-size: 13px; font-weight: 400; }
+input[type=text], textarea, select { width: 100%; font: 15px var(--f-body); color: var(--ink); background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+textarea { min-height: 72px; resize: vertical; }
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, .drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .row2 { grid-template-columns: 1fr; } }
+
+.drop { position: relative; border: 2px dashed var(--line); border-radius: 12px; min-height: 180px; display: grid; place-items: center; text-align: center; padding: 16px; cursor: pointer; background: var(--soft); overflow: hidden; }
+.drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.drop img { max-height: 320px; border-radius: 8px; }
+.drop .big { font: 500 15px var(--f-display); }
+
+.btn { border: 0; border-radius: 9px; padding: 12px 18px; font: 600 15px var(--f-body); cursor: pointer; background: var(--accent); color: var(--accent-ink); }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.btn.small { padding: 7px 12px; font-size: 13px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.ai { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ai-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--soft); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.ai-body { padding: 14px; display: grid; grid-template-columns: 140px 1fr; gap: 8px 14px; font-size: 14px; }
+.ai-body dt { color: var(--muted); }
+.ai-body dd { margin: 0; min-width: 0; }
+@media (max-width: 480px) { .ai-body { grid-template-columns: 1fr; } .ai-body dt { margin-top: 6px; } }
+.thinking { color: var(--muted); font-style: italic; }
+
+.sev { display: inline-flex; align-items: center; gap: 6px; font: 600 12px var(--f-mono); padding: 3px 8px; border-radius: 99px; border: 1.5px solid currentColor; white-space: nowrap; }
+.sev i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.sev[data-s="1"] { color: var(--s1); } .sev[data-s="2"] { color: var(--s2); } .sev[data-s="3"] { color: var(--s3); }
+.sev[data-s="4"] { color: var(--s4); } .sev[data-s="5"] { color: var(--s5); }
+.chip { font: 500 12px var(--f-body); padding: 3px 9px; border-radius: 99px; background: var(--soft); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.chip.emer { background: var(--s5); color: #fff; border-color: transparent; }
+.chip.st-new { color: var(--ink); } .chip.st-resolved { color: var(--ok); border-color: var(--ok); } .chip.st-rejected { color: var(--muted); text-decoration: line-through; }
+.chip.st-in_progress, .chip.st-assigned { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+.mono { font-family: var(--f-mono); font-size: 13px; }
+.note { padding: 12px 14px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); font-size: 14px; }
+.note.good { border-color: var(--ok); }
+.note.bad { border-color: var(--danger); }
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 560px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.stat b { display: block; font: 700 24px var(--f-display); font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.stat.alert b { color: var(--s5); }
+
+.filters { display: flex; gap: 10px; flex-wrap: wrap; }
+.filters select { width: auto; flex: 1 1 180px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: 10px; display: grid; grid-template-columns: 92px 1fr; gap: 12px; padding: 12px; }
+.card[data-s="1"] { border-left-color: var(--s1); } .card[data-s="2"] { border-left-color: var(--s2); } .card[data-s="3"] { border-left-color: var(--s3); }
+.card[data-s="4"] { border-left-color: var(--s4); } .card[data-s="5"] { border-left-color: var(--s5); }
+.thumb { width: 92px; height: 92px; border-radius: 8px; object-fit: cover; background: var(--soft); display: grid; place-items: center; color: var(--muted); font-size: 11px; text-align: center; }
+.card-main { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.card-top { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.card h3 { margin: 0; font: 600 15px/1.3 var(--f-body); }
+.meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.overdue { color: var(--s5); font-weight: 600; }
+details.more summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+details.more[open] { display: flex; flex-direction: column; gap: 8px; }
+.hist { list-style: none; margin: 0; padding: 0; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.hist li { display: flex; gap: 8px; } .hist .mono { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.big-photo { border-radius: 8px; max-height: 360px; object-fit: contain; align-self: flex-start; }
+@media (max-width: 420px) { .card { grid-template-columns: 64px 1fr; } .thumb { width: 64px; height: 64px; } }
+
+.schema-box { overflow-x: auto; }
+.schema-box svg { display: block; width: 100%; height: auto; min-width: 300px; }
+.empty { text-align: center; color: var(--muted); padding: 28px 12px; }
+.empty b { display: block; color: var(--ink); font: 500 15px var(--f-display); margin-bottom: 6px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 9px; font-weight: 500; max-width: calc(100% - 32px); z-index: 20; }
+@media (prefers-reduced-motion: no-preference) { .card, .ai { animation: in .25s ease-out; } @keyframes in { from { transform: translateY(4px); } to { transform: none; } } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Міські дефекти</h1>
+    <p class="sub">Сфотографуйте проблему, і AI визначить, що це, наскільки небезпечно і яка служба має це виправити.</p>
+    <div class="hazard" aria-hidden="true"></div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button id="tab-report" role="tab" aria-selected="true" data-tab="report">Повідомити</button>
+    <button id="tab-track" role="tab" aria-selected="false" data-tab="track">Мої заявки</button>
+    <button id="tab-dispatch" role="tab" aria-selected="false" data-tab="dispatch">Диспетчерська</button>
+  </div>
+
+  <!-- CITIZEN: REPORT -->
+  <section id="view-report" class="stack">
+    <form class="panel" id="report-form" novalidate>
+      <h2>1. Фото проблеми</h2>
+      <div class="drop" id="drop">
+        <input type="file" id="photo" accept="image/jpeg,image/png,image/webp" capture="environment" aria-label="Фото проблеми">
+        <div id="drop-empty"><div class="big">Натисніть, щоб сфотографувати або вибрати фото</div><div class="hint">JPG, PNG або WebP. Обличчя й номери авто краще не знімати крупно.</div></div>
+        <img id="preview" alt="Вибране фото" hidden>
+      </div>
+
+      <h2>2. Де це</h2>
+      <label class="f">Адреса або орієнтир
+        <input type="text" id="address" placeholder="вул. Шевченка, 12, біля зупинки" autocomplete="street-address">
+      </label>
+      <label class="f">Координати <span class="hint">підставляються автоматично, якщо у фото збережена локація. Інакше в Google Maps натисніть на точку і скопіюйте числа</span>
+        <input type="text" id="coords" placeholder="50.4501, 30.5234" inputmode="decimal">
+      </label>
+      <div id="geo-note" class="hint" role="status"></div>
+
+      <h2>3. Коментар</h2>
+      <label class="f">Що сталося <span class="hint">необов'язково, але допомагає AI</span>
+        <textarea id="comment" placeholder="Яма вже тиждень, вчора туди потрапила машина"></textarea>
+      </label>
+      <label class="f">Контакт для зворотного зв'язку <span class="hint">необов'язково</span>
+        <input type="text" id="contact" placeholder="Ім'я, телефон або Telegram">
+      </label>
+
+      <div class="btns">
+        <button class="btn" type="submit" id="analyze-btn" disabled>Проаналізувати фото</button>
+        <button class="btn ghost" type="button" id="stop-btn" hidden>Зупинити</button>
+      </div>
+      <div id="ai-status" class="hint" role="status"></div>
+    </form>
+
+    <div id="ai-result" hidden></div>
+  </section>
+
+  <!-- CITIZEN: TRACK -->
+  <section id="view-track" class="stack" hidden>
+    <div class="panel">
+      <h2>Статус заявки</h2>
+      <div class="filters">
+        <input type="text" id="track-id" placeholder="Номер заявки, напр. ZV-251105-4821" style="flex:1 1 220px">
+        <button class="btn small" id="track-btn" type="button">Знайти</button>
+      </div>
+      <div id="track-out"></div>
+    </div>
+    <div class="panel">
+      <h2>Заявки, надіслані з цього пристрою</h2>
+      <div id="mine" class="stack"></div>
+    </div>
+  </section>
+
+  <!-- CITY: DISPATCH -->
+  <section id="view-dispatch" class="stack" hidden>
+    <div class="stats" id="stats"></div>
+    <div class="panel">
+      <h2>Схема розташування</h2>
+      <p class="hint" style="margin:0">Точки за координатами заявок. Колір показує терміновість. Підкладки карти немає, натисніть на заявку, щоб відкрити її в Google Maps.</p>
+      <div class="schema-box" id="schema"></div>
+    </div>
+    <div class="filters">
+      <select id="f-dept" aria-label="Служба"></select>
+      <select id="f-status" aria-label="Статус"></select>
+    </div>
+    <div id="board" class="stack"></div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const CATS = {
+  road:      { name: "Дороги й тротуари",            dept: "Служба автомобільних доріг" },
+  lighting:  { name: "Вуличне освітлення",           dept: "Міськсвітло" },
+  building:  { name: "Аварійна будівля / споруда",   dept: "Інспекція з питань будівництва" },
+  trees:     { name: "Дерева й озеленення",          dept: "Зеленбуд" },
+  waste:     { name: "Сміття, стихійне звалище",     dept: "Служба благоустрою" },
+  water:     { name: "Вода, каналізація, люки",      dept: "Водоканал" },
+  traffic:   { name: "Знаки, світлофори, розмітка",  dept: "Відділ організації дорожнього руху" },
+  vandalism: { name: "Вандалізм, графіті",           dept: "Служба благоустрою" },
+  other:     { name: "Інше",                          dept: "Диспетчер (ручний розгляд)" },
+};
+const EMERGENCY_DEPT = "Аварійно-диспетчерська служба";
+const STATUS = { new: "Нова", assigned: "Призначена", in_progress: "В роботі", resolved: "Виконана", rejected: "Відхилена" };
+const SLA_H = { 5: 4, 4: 24, 3: 72, 2: 168, 1: 336 };
+const SEV_TXT = { 1: "косметична", 2: "незначна", 3: "помірна", 4: "серйозна", 5: "небезпека для життя" };
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === "class") n.className = v; else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(k instanceof Node ? k : String(k));
+  return n;
+};
+const fmt = (ms) => new Date(ms).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const sevChip = (s) => el("span", { class: "sev", "data-s": s }, el("i"), `${s}/5 · ${SEV_TXT[s] || ""}`);
+const statusChip = (s) => el("span", { class: "chip st-" + s }, STATUS[s] || s);
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 3200); }
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+function parseCoords(s) {
+  const m = String(s || "").match(/(-?\d{1,2}(?:\.\d+)?)\s*[,; ]\s*(-?\d{1,3}(?:\.\d+)?)/);
+  if (!m) return null;
+  const lat = +m[1], lng = +m[2];
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+}
+function distM(a, b) {
+  const R = 6371000, r = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const normAddr = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+function newId() {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `ZV-${String(d.getFullYear()).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}-${Math.floor(1000 + Math.random() * 9000)}`;
+}
+function slaLeft(r) {
+  const due = r.createdAt + (SLA_H[r.severity] || 72) * 3600e3;
+  return due - Date.now();
+}
+function slaText(ms) {
+  const h = Math.round(Math.abs(ms) / 3600e3);
+  const t = h >= 48 ? `${Math.round(h / 24)} дн` : `${h} год`;
+  return ms < 0 ? `прострочено на ${t}` : `залишилось ${t}`;
+}
+
+/* ---------- tabs ---------- */
+const VIEWS = ["report", "track", "dispatch"];
+function showTab(name) {
+  for (const v of VIEWS) { $("view-" + v).hidden = v !== name; $("tab-" + v).setAttribute("aria-selected", v === name); }
+  store.set("cd-tab", name);
+  if (name === "track") renderMine();
+}
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+{ const h = location.hash.slice(1); showTab(VIEWS.includes(h) ? h : store.get("cd-tab", "report")); }
+
+/* ---------- capabilities ---------- */
+let sample = null, db = null, reports = [], dbReady = false;
+(async () => {
+  try { sample = await window.claude?.use("sample"); } catch { sample = null; }
+  const lim = sample ? await sample.limits().catch(() => null) : null;
+  if (!sample || !lim?.images) { sample = null; $("ai-status").textContent = "AI-аналіз недоступний у цьому перегляді. Відкрийте сторінку в Claude, увійшовши в акаунт."; }
+  updateAnalyzeBtn();
+})();
+(async () => {
+  try { db = await window.claude?.use("db"); } catch { db = null; }
+  if (!db) { dbReady = true; renderAll("Сховище заявок недоступне в цьому перегляді, тому заявки не збережуться."); return; }
+  const timer = setTimeout(() => { if (!dbReady) renderAll("Не вдається завантажити заявки. Перевірте з'єднання."); }, 10000);
+  db.collection("reports").orderBy("createdAt", "desc").limit(300).onSnapshot((snap) => {
+    reports = snap.docs.map((d) => ({ ...d.data(), _id: d.id }));
+    if (!snap.metadata.fromCache) { dbReady = true; clearTimeout(timer); }
+    renderAll();
+  }, (e) => { clearTimeout(timer); dbReady = true; renderAll("Помилка сховища: " + e.code); });
+})();
+renderAll();
+
+/* ---------- report form ---------- */
+let photoFile = null, thumbData = null, aiData = null, ctl = null;
+function updateAnalyzeBtn() { $("analyze-btn").disabled = !photoFile || !sample || !!ctl; }
+
+$("photo").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  photoFile = f; aiData = null; $("ai-result").hidden = true;
+  const url = URL.createObjectURL(f);
+  $("preview").src = url; $("preview").hidden = false; $("drop-empty").hidden = true;
+  thumbData = await makeThumb(url, 480, 0.62).catch(() => null);
+  const gps = readExifGps(await f.arrayBuffer().catch(() => null));
+  if (gps) $("coords").value = `${gps.lat.toFixed(6)}, ${gps.lng.toFixed(6)}`;
+  showGeo(gps ? "Локацію взято з фото." : ($("coords").value ? "" : "У фото немає збереженої локації. Вкажіть адресу або координати."));
+  updateAnalyzeBtn();
+});
+function makeThumb(url, max, q) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      res(c.toDataURL("image/jpeg", q));
+    };
+    img.onerror = rej; img.src = url;
+  });
+}
+
+// Phone cameras write GPS into the JPEG's EXIF block; read it locally, nothing is uploaded.
+function readExifGps(buf) {
+  if (!buf) return null;
+  try {
+    const v = new DataView(buf);
+    if (v.getUint16(0) !== 0xFFD8) return null;
+    let o = 2;
+    while (o + 10 < v.byteLength) {
+      const m = v.getUint16(o);
+      if ((m & 0xFF00) !== 0xFF00) return null;
+      if (m === 0xFFE1 && v.getUint32(o + 4) === 0x45786966) {
+        const t = o + 10, le = v.getUint16(t) === 0x4949;
+        const u16 = (p) => v.getUint16(p, le), u32 = (p) => v.getUint32(p, le);
+        const ifd0 = t + u32(t + 4);
+        let gps = 0;
+        for (let i = 0; i < u16(ifd0); i++) { const e = ifd0 + 2 + i * 12; if (u16(e) === 0x8825) gps = t + u32(e + 8); }
+        if (!gps) return null;
+        const g = {};
+        for (let i = 0; i < u16(gps); i++) {
+          const e = gps + 2 + i * 12, tag = u16(e);
+          if (tag === 1 || tag === 3) g[tag] = String.fromCharCode(v.getUint8(e + 8));
+          if (tag === 2 || tag === 4) { const p = t + u32(e + 8), r = (k) => u32(p + k * 8) / u32(p + k * 8 + 4); g[tag] = r(0) + r(1) / 60 + r(2) / 3600; }
+        }
+        const lat = g[2] * (g[1] === "S" ? -1 : 1), lng = g[4] * (g[3] === "W" ? -1 : 1);
+        return Number.isFinite(lat) && Number.isFinite(lng) && (lat || lng) ? { lat, lng } : null;
+      }
+      o += 2 + v.getUint16(o + 2);
+    }
+  } catch {}
+  return null;
+}
+function showGeo(msg) {
+  const c = parseCoords($("coords").value);
+  $("geo-note").replaceChildren(msg, c ? el("a", { href: `https://www.google.com/maps?q=${c.lat},${c.lng}`, target: "_blank", rel: "noopener" }, (msg ? " " : "") + "Перевірити на Google Maps") : "");
+}
+$("coords").addEventListener("input", () => showGeo(""));
+
+function buildPrompt() {
+  const cats = Object.entries(CATS).map(([k, v]) => `- ${k}: ${v.name}`).join("\n");
+  return `Ти — AI-диспетчер міської служби, що приймає скарги мешканців на дефекти міської інфраструктури.
+Проаналізуй фото від мешканця. Відповідай українською.
+
+Коментар мешканця: ${$("comment").value.trim() || "(немає)"}
+Адреса: ${$("address").value.trim() || "(не вказана)"}
+
+Категорії (поле category — тільки ключ зі списку):
+${cats}
+
+Терміновість severity від 1 до 5:
+1 — косметична проблема; 2 — незначна, можна планово; 3 — помірна, погіршує користування; 4 — серйозна, ризик травми чи пошкодження майна; 5 — пряма небезпека для життя (відкритий люк, обірвані дроти, загроза обвалу, дерево на дорозі).
+
+Якщо на фото немає міської проблеми (селфі, мем, інтер'єр квартири, розмите фото), постав is_valid_report=false і поясни чому в reject_reason.
+
+Відповідь — тільки JSON такої форми:
+{"is_valid_report": true, "reject_reason": "", "category": "road", "title": "Коротка назва до 8 слів", "description": "1-2 речення: що видно на фото, розмір, розташування", "severity": 3, "is_emergency": false, "hazards": ["хто під загрозою і чому"], "recommended_action": "що має зробити служба", "privacy": "чи видно обличчя або номери авто (так/ні, коротко)", "confidence": 0.8}`;
+}
+
+$("report-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!photoFile || !sample || ctl) return;
+  ctl = new AbortController(); updateAnalyzeBtn();
+  $("stop-btn").hidden = false;
+  $("ai-status").textContent = "AI розглядає фото… Зазвичай це 10–40 секунд.";
+  $("ai-result").hidden = true;
+  try {
+    const r = await sample.json(buildPrompt(), { images: [photoFile], signal: ctl.signal });
+    aiData = normalizeAi(r);
+    $("ai-status").textContent = "";
+    renderAiResult();
+  } catch (err) {
+    $("ai-status").textContent = {
+      cancelled: "Аналіз зупинено.",
+      not_granted: "Ви не дозволили сторінці звертатися до Claude, тому AI-аналіз вимкнено.",
+      rate_limited: "Забагато запитів. Спробуйте за хвилину.",
+      image_rejected: "Це фото не вдалося прочитати. Виберіть інше (JPG або PNG до 20 МБ).",
+      invalid_json: "AI відповів у неправильному форматі. Натисніть «Проаналізувати» ще раз.",
+      refused: "AI відмовився аналізувати це фото. Виберіть інше.",
+    }[err?.code] || "Не вдалося проаналізувати фото. Спробуйте ще раз.";
+    if (err?.code === "not_granted") sample = null;
+  } finally {
+    ctl = null; $("stop-btn").hidden = true; updateAnalyzeBtn();
+  }
+});
+$("stop-btn").addEventListener("click", () => ctl?.abort());
+
+function normalizeAi(r) {
+  r = r && typeof r === "object" ? r : {};
+  const sev = Math.min(5, Math.max(1, Math.round(+r.severity || 3)));
+  return {
+    valid: r.is_valid_report !== false,
+    rejectReason: String(r.reject_reason || ""),
+    category: CATS[r.category] ? r.category : "other",
+    title: String(r.title || "Без назви").slice(0, 120),
+    description: String(r.description || "").slice(0, 600),
+    severity: sev,
+    emergency: !!r.is_emergency || sev === 5,
+    hazards: Array.isArray(r.hazards) ? r.hazards.map(String).slice(0, 5) : [],
+    action: String(r.recommended_action || "").slice(0, 400),
+    privacy: String(r.privacy || "").slice(0, 200),
+    confidence: Math.max(0, Math.min(1, +r.confidence || 0)),
+  };
+}
+const deptFor = (cat, emergency) => CATS[cat].dept + (emergency ? " + " + EMERGENCY_DEPT : "");
+
+function renderAiResult() {
+  const a = aiData, box = $("ai-result");
+  box.replaceChildren(); box.hidden = false;
+  const catSel = el("select", { id: "ai-cat", "aria-label": "Категорія" },
+    Object.entries(CATS).map(([k, v]) => el("option", { value: k, selected: k === a.category }, v.name)));
+  const deptOut = el("span", {}, deptFor(a.category, a.emergency));
+  catSel.addEventListener("change", () => { a.category = catSel.value; deptOut.textContent = deptFor(a.category, a.emergency); });
+
+  const wrap = el("div", { class: "ai" },
+    el("div", { class: "ai-head" },
+      el("strong", { style: "flex:1 1 200px" }, a.valid ? a.title : "Схоже, це не міська проблема"),
+      sevChip(a.severity), a.emergency ? el("span", { class: "chip emer" }, "Аварійна") : null),
+    el("dl", { class: "ai-body" },
+      !a.valid ? [el("dt", {}, "Чому"), el("dd", {}, a.rejectReason || "AI не побачив дефекту на фото.")] : null,
+      el("dt", {}, "Що на фото"), el("dd", {}, a.description || "—"),
+      el("dt", {}, "Категорія"), el("dd", {}, catSel, el("div", { class: "hint" }, "Якщо AI помилився, виберіть правильну.")),
+      el("dt", {}, "Куди піде"), el("dd", {}, deptOut),
+      el("dt", {}, "Ризики"), el("dd", {}, a.hazards.length ? a.hazards.join("; ") : "—"),
+      el("dt", {}, "Рекомендація"), el("dd", {}, a.action || "—"),
+      el("dt", {}, "Приватність"), el("dd", {}, a.privacy || "—"),
+      el("dt", {}, "Впевненість AI"), el("dd", { class: "mono" }, Math.round(a.confidence * 100) + "%"),
+    ),
+  );
+  const send = el("button", { class: "btn", type: "button", id: "send-btn" }, a.valid ? "Надіслати заявку" : "Все одно надіслати на ручний розгляд");
+  const status = el("div", { role: "status" });
+  send.addEventListener("click", () => submitReport(send, status));
+  box.append(el("div", { class: "panel" }, el("h2", {}, "Висновок AI"), wrap, el("div", { class: "btns" }, send), status));
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function submitReport(btn, status) {
+  if (!db) { status.replaceChildren(el("div", { class: "note bad" }, "Сховище недоступне, заявку не збережено.")); return; }
+  btn.disabled = true;
+  const a = aiData, coords = parseCoords($("coords").value), address = $("address").value.trim();
+
+  // Duplicate check: same category, still open, within 40 m (or same address when no coordinates).
+  const open = reports.filter((r) => r.category === a.category && !["resolved", "rejected"].includes(r.status));
+  const dup = open.find((r) => coords && r.coords ? distM(coords, r.coords) <= 40 : address && normAddr(r.address) === normAddr(address));
+  try {
+    if (dup) {
+      const hist = [...(dup.history || []), { status: dup.status, at: Date.now(), note: "Ще один мешканець повідомив про цю проблему" }];
+      await db.doc("reports/" + dup._id).update({ confirmations: (dup.confirmations || 1) + 1, history: hist });
+      remember(dup._id);
+      status.replaceChildren(el("div", { class: "note good" },
+        "Про цю проблему вже повідомили, заявка ", el("strong", { class: "mono" }, dup._id),
+        `. Ваш голос додано, тепер скарг: ${(dup.confirmations || 1) + 1}. Чим більше голосів, тим вищий пріоритет.`));
+    } else {
+      const id = newId();
+      const doc = {
+        id, createdAt: Date.now(), status: "new",
+        category: a.category, title: a.valid ? a.title : "Потребує ручного розгляду", description: a.description,
+        severity: a.severity, emergency: a.emergency, department: a.valid ? deptFor(a.category, a.emergency) : CATS.other.dept,
+        address, coords, comment: $("comment").value.trim().slice(0, 600), contact: $("contact").value.trim().slice(0, 120),
+        photo: thumbData, confirmations: 1,
+        ai: { valid: a.valid, hazards: a.hazards, action: a.action, privacy: a.privacy, confidence: a.confidence },
+        history: [{ status: "new", at: Date.now(), note: "Заявку створено, AI визначив службу: " + deptFor(a.category, a.emergency) }],
+      };
+      await db.doc("reports/" + id).set(doc);
+      remember(id);
+      status.replaceChildren(el("div", { class: "note good" },
+        "Заявку прийнято. Номер: ", el("strong", { class: "mono" }, id),
+        `. Передано: ${doc.department}. Статус можна перевірити у вкладці «Мої заявки».`));
+    }
+    resetForm();
+  } catch (err) {
+    btn.disabled = false;
+    status.replaceChildren(el("div", { class: "note bad" }, err?.code === "invalid_argument"
+      ? "У вас немає прав додавати заявки до цієї сторінки. Попросіть власника дати доступ «Contributor»."
+      : "Не вдалося зберегти заявку. Спробуйте ще раз."));
+  }
+}
+function remember(id) { const m = store.get("cd-mine", []); if (!m.includes(id)) store.set("cd-mine", [id, ...m].slice(0, 30)); }
+function resetForm() {
+  photoFile = null; thumbData = null;
+  $("photo").value = ""; $("preview").hidden = true; $("drop-empty").hidden = false;
+  for (const id of ["comment", "coords", "address"]) $(id).value = "";
+  $("geo-note").textContent = "";
+  updateAnalyzeBtn();
+}
+
+/* ---------- rendering ---------- */
+function renderAll(msg) { renderDispatch(msg); if (!$("view-track").hidden) renderMine(); }
+
+function reportCard(r, { manage }) {
+  const left = slaLeft(r), open = !["resolved", "rejected"].includes(r.status);
+  const mapLink = r.coords ? el("a", { href: `https://www.google.com/maps?q=${r.coords.lat},${r.coords.lng}`, target: "_blank", rel: "noopener" }, "на карті") : null;
+  const more = el("details", { class: "more" }, el("summary", {}, "Деталі та історія"),
+    r.photo ? el("img", { class: "big-photo", src: r.photo, alt: "Фото заявки" }) : null,
+    r.description ? el("div", {}, r.description) : null,
+    r.comment ? el("div", { class: "meta" }, "Коментар мешканця: " + r.comment) : null,
+    r.ai?.action ? el("div", { class: "meta" }, "Рекомендація AI: " + r.ai.action) : null,
+    r.ai?.hazards?.length ? el("div", { class: "meta" }, "Ризики: " + r.ai.hazards.join("; ")) : null,
+    manage && r.contact ? el("div", { class: "meta" }, "Контакт: " + r.contact) : null,
+    el("ul", { class: "hist" }, (r.history || []).map((h) => el("li", {}, el("span", { class: "mono" }, fmt(h.at)), el("span", {}, `${STATUS[h.status] || h.status}. ${h.note || ""}`)))),
+  );
+  const actions = manage && open ? el("div", { class: "btns" }, nextActions(r)) : null;
+  return el("article", { class: "card", "data-s": r.severity },
+    r.photo ? el("img", { class: "thumb", src: r.photo, alt: "" }) : el("div", { class: "thumb" }, r.example ? "приклад" : "без фото"),
+    el("div", { class: "card-main" },
+      el("div", { class: "card-top" }, el("span", { class: "mono" }, r._id), statusChip(r.status), sevChip(r.severity),
+        r.emergency ? el("span", { class: "chip emer" }, "Аварійна") : null,
+        r.confirmations > 1 ? el("span", { class: "chip" }, `скарг: ${r.confirmations}`) : null,
+        r.example ? el("span", { class: "chip" }, "приклад") : null),
+      el("h3", {}, r.title),
+      el("div", { class: "meta" }, `${CATS[r.category]?.name || r.category} → ${r.department}`),
+      el("div", { class: "meta" }, r.address || "адреса не вказана", mapLink ? " · " : "", mapLink, " · ", fmt(r.createdAt)),
+      open ? el("div", { class: "meta " + (left < 0 ? "overdue" : "") }, `Термін реакції ${SLA_H[r.severity]} год: ${slaText(left)}`) : null,
+      actions, more,
+    ));
+}
+
+function nextActions(r) {
+  const steps = { new: ["assigned", "Призначити бригаду"], assigned: ["in_progress", "Взяти в роботу"], in_progress: ["resolved", "Позначити виконаною"] };
+  const out = [];
+  if (steps[r.status]) out.push(el("button", { class: "btn small", type: "button", onclick: (e) => setStatus(r, steps[r.status][0], e.currentTarget) }, steps[r.status][1]));
+  out.push(el("button", { class: "btn small ghost", type: "button", onclick: (e) => setStatus(r, "rejected", e.currentTarget) }, "Відхилити"));
+  return out;
+}
+async function setStatus(r, status, btn) {
+  btn.disabled = true;
+  const notes = { assigned: "Призначено: " + r.department, in_progress: "Бригада працює на місці", resolved: "Проблему усунено", rejected: "Відхилено диспетчером" };
+  try {
+    await db.doc("reports/" + r._id).update({ status, history: [...(r.history || []), { status, at: Date.now(), note: notes[status] }] });
+    toast(`${r._id}: ${STATUS[status]}`);
+  } catch { btn.disabled = false; toast("Не вдалося змінити статус"); }
+}
+
+let fDept = store.get("cd-fdept", ""), fStatus = store.get("cd-fstatus", "open");
+function renderDispatch(msg) {
+  const depts = [...new Set(Object.values(CATS).map((c) => c.dept))];
+  const ds = $("f-dept"), ss = $("f-status");
+  ds.replaceChildren(el("option", { value: "" }, "Усі служби"), depts.map((d) => el("option", { value: d, selected: d === fDept }, d)));
+  ss.replaceChildren(
+    el("option", { value: "open", selected: fStatus === "open" }, "Відкриті"),
+    el("option", { value: "", selected: fStatus === "" }, "Усі статуси"),
+    Object.entries(STATUS).map(([k, v]) => el("option", { value: k, selected: k === fStatus }, v)));
+
+  const openR = reports.filter((r) => !["resolved", "rejected"].includes(r.status));
+  const overdue = openR.filter((r) => slaLeft(r) < 0).length;
+  const emerg = openR.filter((r) => r.emergency).length;
+  const done = reports.filter((r) => r.status === "resolved").length;
+  $("stats").replaceChildren(
+    el("div", { class: "stat" }, el("b", {}, openR.length), el("span", {}, "Відкриті")),
+    el("div", { class: "stat " + (emerg ? "alert" : "") }, el("b", {}, emerg), el("span", {}, "Аварійні")),
+    el("div", { class: "stat " + (overdue ? "alert" : "") }, el("b", {}, overdue), el("span", {}, "Прострочені")),
+    el("div", { class: "stat" }, el("b", {}, done), el("span", {}, "Виконані")));
+
+  const list = reports.filter((r) =>
+    (!fDept || r.department.startsWith(fDept)) &&
+    (fStatus === "open" ? !["resolved", "rejected"].includes(r.status) : !fStatus || r.status === fStatus))
+    .sort((a, b) => (b.emergency - a.emergency) || (b.severity - a.severity) || (slaLeft(a) - slaLeft(b)));
+
+  const board = $("board");
+  if (msg) board.replaceChildren(el("div", { class: "note bad" }, msg));
+  else if (!dbReady) board.replaceChildren(el("div", { class: "empty" }, "Завантажуємо заявки…"));
+  else if (!list.length) board.replaceChildren(el("div", { class: "empty" }, el("b", {}, reports.length ? "Під цей фільтр заявок немає" : "Заявок поки немає"),
+    "Надішліть першу у вкладці «Повідомити». Вона з'явиться тут одразу, вже з категорією і службою."));
+  else board.replaceChildren(...list.map((r) => reportCard(r, { manage: !!db })));
+  renderSchema(list);
+}
+$("f-dept").addEventListener("change", (e) => { fDept = e.target.value; store.set("cd-fdept", fDept); renderDispatch(); });
+$("f-status").addEventListener("change", (e) => { fStatus = e.target.value; store.set("cd-fstatus", fStatus); renderDispatch(); });
+
+function renderSchema(list) {
+  const pts = list.filter((r) => r.coords);
+  const box = $("schema");
+  if (!pts.length) { box.replaceChildren(el("div", { class: "empty" }, "Тут з'являться точки заявок, у яких вказано координати.")); return; }
+  const W = 640, H = 260, P = 28;
+  let [a, b, c, d] = [Math.min(...pts.map((p) => p.coords.lat)), Math.max(...pts.map((p) => p.coords.lat)), Math.min(...pts.map((p) => p.coords.lng)), Math.max(...pts.map((p) => p.coords.lng))];
+  const pad = 0.002; if (b - a < pad) { a -= pad; b += pad; } if (d - c < pad) { c -= pad; d += pad; }
+  const x = (lng) => P + (lng - c) / (d - c) * (W - 2 * P), y = (lat) => H - P - (lat - a) / (b - a) * (H - 2 * P);
+  const NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Схема розташування заявок");
+  const mk = (t, at) => { const n = document.createElementNS(NS, t); for (const k in at) n.setAttribute(k, at[k]); return n; };
+  svg.append(mk("rect", { x: 0.5, y: 0.5, width: W - 1, height: H - 1, rx: 8, fill: "var(--soft)", stroke: "var(--line)" }));
+  for (let i = 1; i < 4; i++) {
+    svg.append(mk("line", { x1: P, x2: W - P, y1: P + i * (H - 2 * P) / 4, y2: P + i * (H - 2 * P) / 4, stroke: "var(--line)", "stroke-dasharray": "3 5" }));
+    svg.append(mk("line", { y1: P, y2: H - P, x1: P + i * (W - 2 * P) / 4, x2: P + i * (W - 2 * P) / 4, stroke: "var(--line)", "stroke-dasharray": "3 5" }));
+  }
+  for (const r of pts) {
+    const g = mk("a", { href: `https://www.google.com/maps?q=${r.coords.lat},${r.coords.lng}`, target: "_blank" });
+    const ttl = mk("title", {}); ttl.textContent = `${r._id} · ${r.title}`;
+    const cx = x(r.coords.lng), cy = y(r.coords.lat), rad = 6 + Math.min(6, (r.confirmations || 1) - 1) * 1.5;
+    if (r.emergency) g.append(mk("circle", { cx, cy, r: rad + 5, fill: "none", stroke: `var(--s5)`, "stroke-width": 1.5 }));
+    g.append(ttl, mk("circle", { cx, cy, r: rad, fill: `var(--s${r.severity})`, stroke: "var(--surface)", "stroke-width": 2 }));
+    svg.append(g);
+  }
+  const lbl = mk("text", { x: W - P, y: H - 9, "text-anchor": "end", fill: "var(--muted)", "font-size": 11, "font-family": "JetBrains Mono, monospace" });
+  lbl.textContent = `${a.toFixed(4)}…${b.toFixed(4)} N · ${c.toFixed(4)}…${d.toFixed(4)} E`;
+  svg.append(lbl);
+  box.replaceChildren(svg);
+}
+
+/* ---------- tracking ---------- */
+function renderMine() {
+  const ids = store.get("cd-mine", []);
+  const mine = ids.map((id) => reports.find((r) => r._id === id)).filter(Boolean);
+  $("mine").replaceChildren(...(mine.length ? mine.map((r) => reportCard(r, { manage: false }))
+    : [el("div", { class: "empty" }, el("b", {}, "Ви ще нічого не надсилали з цього пристрою"), "Після відправки заявка з'явиться тут разом зі статусом.")]));
+}
+$("track-btn").addEventListener("click", () => {
+  const q = $("track-id").value.trim().toUpperCase();
+  const r = reports.find((x) => x._id.toUpperCase() === q);
+  $("track-out").replaceChildren(r ? reportCard(r, { manage: false }) : el("div", { class: "note" }, q ? `Заявку ${q} не знайдено. Перевірте номер.` : "Введіть номер заявки."));
+});
+</script>

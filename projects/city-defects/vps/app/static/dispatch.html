@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Диспетчерська · Міські дефекти</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="wrap wide stack">
+  <header>
+    <h1>Диспетчерська</h1>
+    <p class="sub">Заявки мешканців, відсортовані за небезпекою. Оновлюється кожні 30 секунд.</p>
+    <div class="hazard" aria-hidden="true"></div>
+  </header>
+  <div class="stats" id="stats"></div>
+  <div class="dgrid">
+    <div class="sticky"><div id="dmap"></div></div>
+    <div class="stack">
+      <div class="filters">
+        <select id="f-dept" aria-label="Служба"></select>
+        <select id="f-status" aria-label="Статус">
+          <option value="open">Відкриті</option><option value="">Усі статуси</option>
+          <option value="new">Нові</option><option value="assigned">Призначені</option><option value="in_progress">В роботі</option>
+          <option value="resolved">Виконані</option><option value="rejected">Відхилені</option>
+        </select>
+      </div>
+      <div id="board" class="stack"><div class="empty">Завантажуємо заявки…</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="/static/common.js"></script>
+<script>
+let reports = [];
+const map = L.map("dmap").setView(DEFAULT_CENTER, 12);
+L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATTR }).addTo(map);
+const layer = L.layerGroup().addTo(map);
+let fitted = false;
+
+async function load() {
+  try { reports = await api("/api/admin/reports"); render(); }
+  catch (err) { $("board").replaceChildren(el("div", { class: "note bad" }, err.message)); }
+}
+
+const STEPS = { new: ["assigned", "Призначити бригаду"], assigned: ["in_progress", "Взяти в роботу"], in_progress: ["resolved", "Позначити виконаною"] };
+async function setStatus(r, status, btn) {
+  btn.disabled = true;
+  try { await api(`/api/admin/reports/${r.id}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) }); await load(); }
+  catch (err) { btn.disabled = false; alert(err.message); }
+}
+function actions(r) {
+  if (!isOpen(r)) return null;
+  return el("div", { class: "btns" },
+    STEPS[r.status] ? el("button", { class: "btn small", type: "button", onclick: (e) => setStatus(r, STEPS[r.status][0], e.currentTarget) }, STEPS[r.status][1]) : null,
+    el("button", { class: "btn small ghost", type: "button", onclick: (e) => setStatus(r, "rejected", e.currentTarget) }, "Відхилити"));
+}
+
+function render() {
+  const depts = [...new Set(reports.map((r) => r.department.split(" + ")[0]))].sort();
+  const fd = $("f-dept"), cur = fd.value;
+  fd.replaceChildren(el("option", { value: "" }, "Усі служби"), depts.map((d) => el("option", { value: d, selected: d === cur }, d)));
+  const fs = $("f-status").value;
+
+  const open = reports.filter(isOpen);
+  const stat = (n, label, alert) => el("div", { class: "stat" + (alert && n ? " alert" : "") }, el("b", {}, n), el("span", {}, label));
+  $("stats").replaceChildren(stat(open.length, "Відкриті"), stat(open.filter((r) => r.emergency).length, "Аварійні", true),
+    stat(open.filter((r) => slaLeft(r) < 0).length, "Прострочені", true), stat(reports.filter((r) => r.status === "resolved").length, "Виконані"));
+
+  const list = reports.filter((r) => (!fd.value || r.department.startsWith(fd.value)) && (fs === "open" ? isOpen(r) : !fs || r.status === fs))
+    .sort((a, b) => (b.emergency - a.emergency) || (b.severity - a.severity) || (slaLeft(a) - slaLeft(b)));
+  $("board").replaceChildren(...(list.length ? list.map((r) => reportCard(r, { actions: actions(r), contact: true }))
+    : [el("div", { class: "empty" }, el("b", {}, reports.length ? "Під цей фільтр заявок немає" : "Заявок поки немає"), "Нові заявки з'являться тут автоматично.")]));
+
+  layer.clearLayers();
+  const pts = list.filter((r) => r.lat != null);
+  for (const r of pts) {
+    const c = L.circleMarker([r.lat, r.lng], { radius: 7 + Math.min(6, r.confirmations - 1) * 1.5, color: "#fff", weight: 2, fillColor: SEV_COLOR[r.severity], fillOpacity: .95 }).addTo(layer);
+    c.bindPopup(`<b>${r.id}</b><br>${r.title.replace(/[<>&]/g, "")}<br>${STATUS[r.status]}`);
+    c.on("click", () => document.getElementById("r-" + r.id)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }
+  if (pts.length && !fitted) { map.fitBounds(pts.map((r) => [r.lat, r.lng]), { padding: [30, 30], maxZoom: 16 }); fitted = true; }
+}
+$("f-dept").addEventListener("change", render);
+$("f-status").addEventListener("change", render);
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
